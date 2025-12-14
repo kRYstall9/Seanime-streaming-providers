@@ -3,7 +3,7 @@
 
 class Provider {
 
-    private apiBaseUrl: string = "{{domain}}";
+    private apiBaseUrl: string = "https://animeunity.top";
     private cookies: string = "";
     private csrfToken: string = "";
     private cookiesExpirationDate: Date | null = null;
@@ -23,7 +23,7 @@ class Provider {
         if (normalizedUrl.includes("animeunity.top")) {
             return this._searchAnimeUnityTop(query);
         } else {
-            // Default to the API-based logic for .so and other potential mirrors
+            
             return this._searchAnimeUnitySo(query);
         }
     }
@@ -34,7 +34,7 @@ class Provider {
         if (normalizedUrl.includes("animeunity.top")) {
             return this._findEpisodesAnimeUnityTop(id);
         } else {
-            // Default to the API-based logic for .so and other potential mirrors
+            
             return this._findEpisodesAnimeUnitySo(id);
         }
     }
@@ -48,12 +48,12 @@ class Provider {
         if (normalizedUrl.includes("animeunity.top")) {
             return this._findEpisodeServerAnimeUnityTop(episode, server);
         } else {
-            // Default to the API-based logic for .so and other potential mirrors
+            
             return this._findEpisodeServerAnimeUnitySo(episode, server);
         }
     }
     
-    // --- New AnimeUnity.TOP Scrapers (Regex Scraping) ---
+    // --- New AnimeUnity.TOP Scrapers (Regex Scraping & Season Filtering) ---
 
     async _searchAnimeUnityTop(query: SearchOptions): Promise<SearchResult[]> {
         const queryText = query['query'] ?? query.media.englishTitle ?? query.media.romajiTitle;
@@ -84,6 +84,9 @@ class Provider {
         
         const results: SearchResult[] = [];
         
+        // Extract the intended season from the query to encode in the ID
+        const targetSeason = this._extractTargetSeason(queryText);
+        
         // Regex to find the link and title from the last anchor tag in the block
         // Captures: 1. URL 2. Title Text
         const regex = /<a href="([^"]+)" class="title"[^>]*>([^<]+)<\/a>/gi;
@@ -96,9 +99,12 @@ class Provider {
             if (link && title) {
                 // Extract a unique identifier for the ID
                 const slug = link.match(/\/anime\/(\d+-[^\/]+)/)?.[1] || title.toLowerCase().replace(/\s/g, '-');
+                
+                // Encode the target season into the ID so findEpisodes knows what to filter
+                const finalId = targetSeason > 1 ? `${slug}-S${targetSeason}` : slug;
 
                 results.push({
-                    id: slug,
+                    id: finalId,
                     title: title,
                     url: link,
                     subOrDub: query.dub ? 'dub' : 'sub' 
@@ -106,15 +112,19 @@ class Provider {
             }
         }
         
-        console.log(`Found ${results.length} results on AU.TOP via Regex`);
+        console.log(`Found ${results.length} results on AU.TOP via Regex (Target Season: ${targetSeason})`);
         return results;
     }
 
     async _findEpisodesAnimeUnityTop(id: string): Promise<EpisodeDetails[]> {
-        // ID is the slug: '1640-tonikawa-over-the-moon-for-you-streaming'
-        const animePageUrl = `${this.apiBaseUrl}/anime/${id}.html`; 
+        // Extract the target season from the encoded ID (defaults to 1 if not present)
+        const targetSeason = this._extractTargetSeason(id);
         
-        console.log(`Fetching episodes from ${animePageUrl}`);
+        // Remove the encoded season tag (-S[N]) from the ID before building the URL
+        const animeSlug = id.split('-S')[0];
+        const animePageUrl = `${this.apiBaseUrl}/anime/${animeSlug}.html`; 
+        
+        console.log(`Fetching episodes from ${animePageUrl} (Filtering for Season ${targetSeason})`);
         
         const response = await fetch(animePageUrl);
         
@@ -149,47 +159,54 @@ class Provider {
             const episodeNum = Number(match[3]); 
 
             if (dataLink) {
-                const episodeId = `${dataLink.split('/').pop()!}-${seasonNum}x${episodeNum}`;
+                
+                // Crucial Check: Only include episodes that match the target season
+                if (seasonNum === targetSeason) {
+                    // Episode ID is based on the final part of the dataLink + season/episode info
+                    const episodeId = `${dataLink.split('/').pop()!}-${seasonNum}x${episodeNum}`;
 
-                episodes.push({
-                    id: episodeId,
-                    number: episodeNum, 
-                    season: seasonNum,
-                    url: dataLink
-                });
+                    episodes.push({
+                        id: episodeId,
+                        number: episodeNum, 
+                        season: seasonNum,
+                        url: dataLink // This is the Supervideo embed link
+                    });
+                }
             }
         }
 
         if (episodes.length === 0) {
-            console.error('No episodes found on the anime page using regex.');
+            console.error(`No episodes found for Season ${targetSeason} on the anime page.`);
         }
 
         return episodes;
     }
     
     async _findEpisodeServerAnimeUnityTop(episode: EpisodeDetails, server: string): Promise<EpisodeServer> {
-        // episode.url is the data-link directly, e.g., https://supervideo.cc/y/u6tyw8e90qdi
+        // Here, episode.url holds the data-link value (e.g., https://supervideo.cc/y/u6tyw8e90qdi)
         const embedUrl = episode.url; 
         console.log(`Fetching embed HTML from: ${embedUrl}`);
         
         const response = await fetch(embedUrl);
 
         if (!response.ok) {
-            console.error("An error occured during the embed scraping. Error: " + response.statusText);
-            throw new Error(response.statusText);
+            console.error(`AU.TOP Embed Fetch Failed: HTTP status ${response.status}. URL: ${embedUrl}`);
+            throw new Error(`Embed Fetch Failed: Status ${response.status}`); 
         }
         const embedHtml = await response.text();
         
         let packedScript: string | null = null;
 
-        // 1. Find the packed script using the corrected regex
-        const match = embedHtml.match(
-            /(?:<script type='text\/javascript'>)(eval\(function\(p,a,c,k,e,d\){[\s\S]+?\}\('[\s\S]+?'\s*,\s*\d+\s*,\s*\d+\s*,\s*'[\s\S]+?'\.split\('\|'\)\s*\)\))(?:\<\/script>)/i
-        );
+        // 1. Find the packed script using a more robust regex that handles variations in the inner function body.
+        const supervideoPackedRegex = /(eval\(function\(p,a,c,k,e,d\){[\s\S]*?\}\s*\([\s\S]*?split\('\|'\)\s*\)\))/i;
+
+        const match = embedHtml.match(supervideoPackedRegex);
         
         if (match && match[1]) {
             packedScript = match[1];
+            console.log("Found packed script."); 
         } else {
+            console.error("Could not find the packed JavaScript in the embed page. Content length: " + embedHtml.length);
             throw new Error("Could not find the packed JavaScript in the embed page.");
         }
 
@@ -201,11 +218,12 @@ class Provider {
         const m3u8Match = unpackedScript.match(/https?:\/\/[^\s"'\\]+\.m3u8[^\s"'\\]*/i);
         
         if (!m3u8Match) {
-            console.error("Unpacked script did not contain an M3U8 URL.");
+            console.error("Unpacked script did not contain an M3U8 URL. Unpacked content size: " + unpackedScript.length);
             throw new Error("M3U8 URL not found in unpacked script.");
         }
 
         const m3u8Url = m3u8Match[0];
+        console.log("Found M3U8 URL: " + m3u8Url); 
         
         const videoSources: VideoSource[] = [{
             quality: 'auto', 
@@ -217,12 +235,31 @@ class Provider {
         const serverResult: EpisodeServer = {
             server: server, 
             headers: {
-                "Referer": embedUrl
+                
+                "Referer": embedUrl 
             },
             videoSources: videoSources
         }
+        
+        if (videoSources.length === 0) {
+             // This should ideally never be hit if m3u8Match was successful, but kept for safety.
+             throw new Error("Video sources list is empty after extraction.");
+        }
 
         return serverResult;
+    }
+    
+    // --- Helper Methods (New Season Extractor) ---
+    
+    _extractTargetSeason(queryOrId: string): number {
+        // Check for patterns like "Season 2", "S2", "s02", etc.
+        const match = queryOrId.match(/season\s*(\d+)|s(\d+)/i);
+        if (match) {
+            // match[1] captures the number from "Season 2". match[2] captures the number from "S2".
+            return Number(match[1] || match[2]) || 1; 
+        }
+        // If no season is specified in the query/ID, default to Season 1.
+        return 1;
     }
 
     // --- Core Supervideo Unpacker Utility ---
@@ -255,6 +292,7 @@ class Provider {
         return p;
     }
 
+
     // --- Original AnimeUnity.SO Scrapers (API-Based) ---
 
     async _searchAnimeUnitySo(query: SearchOptions): Promise<SearchResult[]> {
@@ -271,7 +309,8 @@ class Provider {
             console.log(`Trying to find a match with ${validNameWithoutSeasonWord}`);
 
             response = await this._makeRequest('/archivio', "GET", { title: validNameWithoutSeasonWord }, null, "text");
-            let $ = LoadDoc(response);
+            
+            let $ = LoadDoc(response); 
             jsonData = JSON.parse($('archivio').attr('records') || '[]');
 
             if (jsonData.length === 0) {
@@ -404,7 +443,7 @@ class Provider {
         return serverResult;
     }
 
-    // --- Helper Methods ---
+    // --- Common Helper Methods ---
 
     async _updateCookies(): Promise<void> {
         let now: Date = new Date();

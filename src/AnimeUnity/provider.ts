@@ -3,7 +3,7 @@
 
 class Provider {
 
-    private apiBaseUrl: string = "https://animeunity.top";
+    private apiBaseUrl: string = "{{domain}}";
     private cookies: string = "";
     private csrfToken: string = "";
     private cookiesExpirationDate: Date | null = null;

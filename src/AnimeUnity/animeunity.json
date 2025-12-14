@@ -20,8 +20,8 @@
         "type": "select",
         "default": "https://animeunity.so",
         "options": [
-          { "label": "AnimeUnity (.top)", "value": "https://animeunity.top" },
-          { "label": "AnimeUnity (Default)", "value": "https://animeunity.so" }
+          { "label": "AnimeUnity (Default)", "value": "https://animeunity.so" },
+          { "label": "AnimeUnity (.top)", "value": "https://animeunity.top" }
         ]
       }
     ]

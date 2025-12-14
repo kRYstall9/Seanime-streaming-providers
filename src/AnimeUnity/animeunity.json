@@ -8,7 +8,7 @@
   "type": "onlinestream-provider",
   "language": "typescript",
   "lang": "it",
-  "payloadURI": "https://raw.githubusercontent.com/kRYstall9/Seanime-streaming-providers/refs/heads/main/src/AnimeUnity/provider.ts",
+  "payloadURI": "https://raw.githubusercontent.com/pal-droid/Seanime-streaming-providers/refs/heads/main/src/AnimeUnity/provider.ts",
   
   "userConfig": {
     "requiresConfig": false,

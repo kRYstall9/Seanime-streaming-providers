@@ -1,15 +1,15 @@
 {
-  "id": "AnimeUnity",
+  "id": "animeunity",
   "name": "AnimeUnity",
   "description": "AnimeUnity is an online streaming provider for animes dubbed/subbed in Italian",
-  "manifestURI": "https://raw.githubusercontent.com/pal-droid/Seanime-streaming-providers/refs/heads/main/src/AnimeUnity/animeunity.json",
+  "manifestURI": "https://raw.githubusercontent.com/Pal-droid/Seanime-streaming-providers/add-animeunity-mirror/src/AnimeUnity/animeunity.json",
   "version": "1.0.2",
   "author": "kRYstall9",
   "type": "onlinestream-provider",
   "language": "typescript",
   "lang": "it",
-  "payloadURI": "https://raw.githubusercontent.com/pal-droid/Seanime-streaming-providers/refs/heads/main/src/AnimeUnity/provider.ts",
-  
+  "payloadURI": "https://raw.githubusercontent.com/Pal-droid/Seanime-streaming-providers/add-animeunity-mirror/src/AnimeUnity/provider.ts",
+
   "userConfig": {
     "requiresConfig": false,
     "version": 1,
@@ -18,10 +18,10 @@
         "name": "domain",
         "label": "Preferred Domain",
         "type": "select",
-        "default": "https://www.animeunity.so",
+        "default": "https://animeunity.so",
         "options": [
-          { "label": "AnimeUnity (Official)", "value": "https://www.animeunity.so" },
-          { "label": "AnimeUnity (.top)", "value": "https://www.animeunity.top" }
+          { "label": "AnimeUnity (.top)", "value": "https://animeunity.top" },
+          { "label": "AnimeUnity (Default)", "value": "https://animeunity.so" }
         ]
       }
     ]

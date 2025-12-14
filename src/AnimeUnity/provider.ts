@@ -7,6 +7,8 @@ class Provider {
     private cookies: string = "";
     private csrfToken: string = "";
     private cookiesExpirationDate: Date | null = null;
+    
+    // --- Public Methods ---
 
     getSettings(): Settings {
         return {
@@ -16,7 +18,247 @@ class Provider {
     }
 
     async search(query: SearchOptions): Promise<SearchResult[]> {
+        const normalizedUrl = this.apiBaseUrl.toLowerCase();
+        // Conditional Check for .top domain
+        if (normalizedUrl.includes("animeunity.top")) {
+            return this._searchAnimeUnityTop(query);
+        } else {
+            // Default to the API-based logic for .so and other potential mirrors
+            return this._searchAnimeUnitySo(query);
+        }
+    }
 
+    async findEpisodes(id: string): Promise<EpisodeDetails[]> {
+        const normalizedUrl = this.apiBaseUrl.toLowerCase();
+        // Conditional Check for .top domain
+        if (normalizedUrl.includes("animeunity.top")) {
+            return this._findEpisodesAnimeUnityTop(id);
+        } else {
+            // Default to the API-based logic for .so and other potential mirrors
+            return this._findEpisodesAnimeUnitySo(id);
+        }
+    }
+
+    async findEpisodeServer(episode: EpisodeDetails, _server: string): Promise<EpisodeServer> {
+        let server = "Server1";
+        if (_server !== "default") server = _server;
+
+        const normalizedUrl = this.apiBaseUrl.toLowerCase();
+        // Conditional Check for .top domain
+        if (normalizedUrl.includes("animeunity.top")) {
+            return this._findEpisodeServerAnimeUnityTop(episode, server);
+        } else {
+            // Default to the API-based logic for .so and other potential mirrors
+            return this._findEpisodeServerAnimeUnitySo(episode, server);
+        }
+    }
+    
+    // --- New AnimeUnity.TOP Scrapers (Regex Scraping) ---
+
+    async _searchAnimeUnityTop(query: SearchOptions): Promise<SearchResult[]> {
+        const queryText = query['query'] ?? query.media.englishTitle ?? query.media.romajiTitle;
+        if (!queryText) return [];
+
+        const url = `${this.apiBaseUrl}/?story=${encodeURIComponent(queryText)}&do=search&subaction=search`;
+        console.log(`Searching AU.TOP with: ${url}`);
+        
+        const response = await fetch(url);
+        
+        if (!response.ok) {
+            console.error(`AU.TOP Search Failed: HTTP status ${response.status}`);
+            return [];
+        }
+        
+        let html: string;
+        try {
+            html = await response.text();
+        } catch (e) {
+            console.error(`AU.TOP Search Failed: Could not read response body as text. Error: ${e}`);
+            return [];
+        }
+
+        if (typeof html !== 'string' || html.trim().length === 0) {
+            console.error("AU.TOP Search Failed: Received non-string or empty content.");
+            return [];
+        }
+        
+        const results: SearchResult[] = [];
+        
+        // Regex to find the link and title from the last anchor tag in the block
+        // Captures: 1. URL 2. Title Text
+        const regex = /<a href="([^"]+)" class="title"[^>]*>([^<]+)<\/a>/gi;
+        let match;
+
+        while ((match = regex.exec(html)) !== null) {
+            const link = match[1];
+            const title = match[2].trim();
+
+            if (link && title) {
+                // Extract a unique identifier for the ID
+                const slug = link.match(/\/anime\/(\d+-[^\/]+)/)?.[1] || title.toLowerCase().replace(/\s/g, '-');
+
+                results.push({
+                    id: slug,
+                    title: title,
+                    url: link,
+                    subOrDub: query.dub ? 'dub' : 'sub' 
+                });
+            }
+        }
+        
+        console.log(`Found ${results.length} results on AU.TOP via Regex`);
+        return results;
+    }
+
+    async _findEpisodesAnimeUnityTop(id: string): Promise<EpisodeDetails[]> {
+        // ID is the slug: '1640-tonikawa-over-the-moon-for-you-streaming'
+        const animePageUrl = `${this.apiBaseUrl}/anime/${id}.html`; 
+        
+        console.log(`Fetching episodes from ${animePageUrl}`);
+        
+        const response = await fetch(animePageUrl);
+        
+        if (!response.ok) {
+            console.error(`AU.TOP Episode Fetch Failed: HTTP status ${response.status}`);
+            return [];
+        }
+
+        let html: string;
+        try {
+            html = await response.text();
+        } catch (e) {
+            console.error(`AU.TOP Episode Fetch Failed: Could not read response body. Error: ${e}`);
+            return [];
+        }
+
+        if (typeof html !== 'string' || html.trim().length === 0) {
+            console.error("AU.TOP Episode Fetch Failed: Received non-string or empty content.");
+            return [];
+        }
+
+        const episodes: EpisodeDetails[] = [];
+        
+        // Regex to find episode links within the #episodes container.
+        // Captures: 1. data-link URL; 2. Season Num; 3. Episode Num
+        const regex = /data-link="([^"]+)"[^>]*data-num="(\d+)x(\d+)"/gi;
+        let match;
+
+        while ((match = regex.exec(html)) !== null) {
+            const dataLink = match[1];
+            const seasonNum = Number(match[2]); 
+            const episodeNum = Number(match[3]); 
+
+            if (dataLink) {
+                const episodeId = `${dataLink.split('/').pop()!}-${seasonNum}x${episodeNum}`;
+
+                episodes.push({
+                    id: episodeId,
+                    number: episodeNum, 
+                    season: seasonNum,
+                    url: dataLink
+                });
+            }
+        }
+
+        if (episodes.length === 0) {
+            console.error('No episodes found on the anime page using regex.');
+        }
+
+        return episodes;
+    }
+    
+    async _findEpisodeServerAnimeUnityTop(episode: EpisodeDetails, server: string): Promise<EpisodeServer> {
+        // episode.url is the data-link directly, e.g., https://supervideo.cc/y/u6tyw8e90qdi
+        const embedUrl = episode.url; 
+        console.log(`Fetching embed HTML from: ${embedUrl}`);
+        
+        const response = await fetch(embedUrl);
+
+        if (!response.ok) {
+            console.error("An error occured during the embed scraping. Error: " + response.statusText);
+            throw new Error(response.statusText);
+        }
+        const embedHtml = await response.text();
+        
+        let packedScript: string | null = null;
+
+        // 1. Find the packed script using the corrected regex
+        const match = embedHtml.match(
+            /(?:<script type='text\/javascript'>)(eval\(function\(p,a,c,k,e,d\){[\s\S]+?\}\('[\s\S]+?'\s*,\s*\d+\s*,\s*\d+\s*,\s*'[\s\S]+?'\.split\('\|'\)\s*\)\))(?:\<\/script>)/i
+        );
+        
+        if (match && match[1]) {
+            packedScript = match[1];
+        } else {
+            throw new Error("Could not find the packed JavaScript in the embed page.");
+        }
+
+        // 2. Unpack the script
+        const unpackedScript = this._unpackPacker(packedScript);
+        console.log("Script successfully unpacked.");
+
+        // 3. Extract the M3U8 URL from the unpacked script
+        const m3u8Match = unpackedScript.match(/https?:\/\/[^\s"'\\]+\.m3u8[^\s"'\\]*/i);
+        
+        if (!m3u8Match) {
+            console.error("Unpacked script did not contain an M3U8 URL.");
+            throw new Error("M3U8 URL not found in unpacked script.");
+        }
+
+        const m3u8Url = m3u8Match[0];
+        
+        const videoSources: VideoSource[] = [{
+            quality: 'auto', 
+            subtitles: [],
+            type: 'm3u8',
+            url: m3u8Url
+        }];
+
+        const serverResult: EpisodeServer = {
+            server: server, 
+            headers: {
+                "Referer": embedUrl
+            },
+            videoSources: videoSources
+        }
+
+        return serverResult;
+    }
+
+    // --- Core Supervideo Unpacker Utility ---
+    
+    _unpackPacker(code: string): string {
+        const re =
+            /eval\(function\(p,a,c,k,e,d\)\{[\s\S]+?\}\(\s*(['"])([\s\S]+?)\1\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(['"])([\s\S]+?)\5\.split\('\|'\)\s*\)\)/;
+
+        const m = code.match(re);
+        if (!m) {
+            console.error("Input was not a recognized Dean Edwards packed script.");
+            throw new Error("Not a Dean Edwards packed script");
+        }
+
+        let p = m[2];
+        const a = parseInt(m[3], 10);
+        let c = parseInt(m[4], 10);
+        const k = m[6].split("|");
+
+        function baseN(num: number, base: number): string {
+            return num.toString(base);
+        }
+
+        while (c--) {
+            if (k[c]) {
+                const r = new RegExp(`\\b${baseN(c, a)}\\b`, "g"); 
+                p = p.replace(r, k[c]);
+            }
+        }
+        return p;
+    }
+
+    // --- Original AnimeUnity.SO Scrapers (API-Based) ---
+
+    async _searchAnimeUnitySo(query: SearchOptions): Promise<SearchResult[]> {
+        // Original search logic
         let response: any;
         let jsonData: any[] = [];
         let data: any[] = [];
@@ -66,8 +308,9 @@ class Provider {
 
         return finalResults;
     }
-    async findEpisodes(id: string): Promise<EpisodeDetails[]> {
-
+    
+    async _findEpisodesAnimeUnitySo(id: string): Promise<EpisodeDetails[]> {
+        // Original findEpisodes logic
         const animeId = id.split('-')[0];
         let response = await this._makeRequest(`/info_api/${animeId}/0`, "GET", null, null, "json");
         let episodesAmount = response["episodes_count"];
@@ -75,9 +318,10 @@ class Provider {
 
         return episodes;
     }
-    async findEpisodeServer(episode: EpisodeDetails, _server: string): Promise<EpisodeServer> {
-        let server = "server1"
-        if (_server !== "default") server = _server
+
+    async _findEpisodeServerAnimeUnitySo(episode: EpisodeDetails, server: string): Promise<EpisodeServer> {
+        // Original findEpisodeServer logic
+        if (server !== "default") server = server
 
         let embedUrl = await this._makeRequest(episode.url, "GET", null, null, "text");
 
@@ -110,29 +354,18 @@ class Provider {
             }
         }
 
-        // 2025-10-15 12:48:17 |DBG| log > {"params":{"asn":"","expires":"1765716497","token":"8bad3efd1da2779741b47a3f0080d256"},"url":"https://vixcloud.co/playlist/304645?b=1"}
-        // 2025-10-15 12:48:17 |DBG| log > [{"active":false,"name":"Server1","url":"https://vixcloud.co/playlist/304645?b=1\u0026ub=1"},{"active":1,"name":"Server2","url":"https://vixcloud.co/playlist/304645?b=1\u0026ab=1"}]
-
         //GET Playlist urls
-        let playlistUrl = playlistStreams.filter((stream: any) => stream.name == server)[0]["url"].replace("\u0026", "&");
+        let streamEntry = playlistStreams.filter((stream: any) => stream.name.toLowerCase() == server.toLowerCase());
+        
+        if (streamEntry.length === 0) {
+             throw new Error(`Server '${server}' not found in stream list.`);
+        }
+
+        let playlistUrl = streamEntry[0]["url"].replace("\u0026", "&");
         playlistUrl = `${playlistUrl}&token=${masterPlaylist.params.token}&expires=${masterPlaylist.params.expires}&h=1`;
 
         response = await fetch(playlistUrl);
-        let playlistContent = response.text();
-
-        // #EXTM3U
-
-        // #EXT-X-STREAM-INF:BANDWIDTH=1200000,CODECS="avc1.640028,mp4a.40.2",RESOLUTION=854x480
-
-        // https://vixcloud.co/playlist/304645?type=video&rendition=480p&token=0UAeINVLHokfgxA2XOmEbw&expires=1765717171&edge=au-u3-01
-
-        // #EXT-X-STREAM-INF:BANDWIDTH=2150000,CODECS="avc1.640028,mp4a.40.2",RESOLUTION=1280x720
-
-        // https://vixcloud.co/playlist/304645?type=video&rendition=720p&token=eqC_pgU64QDVHP90n9g6IA&expires=1765717171&edge=au-u3-01
-
-        // #EXT-X-STREAM-INF:BANDWIDTH=4500000,CODECS="avc1.640028,mp4a.40.2",RESOLUTION=1920x1080
-
-        // https://vixcloud.co/playlist/304645?type=video&rendition=1080p&token=FiJectPI0_goEM35lIwtuA&expires=1765717171&edge=au-u3-01
+        let playlistContent = await response.text();
 
         const lines: string[] = playlistContent.split('\n').map((line: any) => line.trim()).filter(line => line !== '');
         const streams: any[] = [];
@@ -171,8 +404,9 @@ class Provider {
         return serverResult;
     }
 
-    async _updateCookies(): Promise<void> {
+    // --- Helper Methods ---
 
+    async _updateCookies(): Promise<void> {
         let now: Date = new Date();
 
         if (this.cookiesExpirationDate == null || this.cookiesExpirationDate < now) {
@@ -181,11 +415,16 @@ class Provider {
 
                 if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
 
-                let cookies: string = JSON.parse(JSON.stringify(response.headers))["Set-Cookie"];
-                let cookiesParts: string[] = cookies.split(";");
-                let expirationDateString: string = cookiesParts.find((p: string) => p.toLowerCase().startsWith("expires="))?.split("Expires=")[1].split(";")[0].trim() || "";
-                this.cookiesExpirationDate = new Date(expirationDateString);
-                this.cookies = cookiesParts.find((p: string) => p.toLowerCase().startsWith("xsrf-token=") ? p.trim() : "") || "";
+                // Use bracket notation access for headers to resolve TypeError
+                let headersJson = JSON.parse(JSON.stringify(response.headers));
+                let cookies: string = headersJson["Set-Cookie"] || "";
+                
+                if (cookies) {
+                    let cookiesParts: string[] = cookies.split(";").map(p => p.trim());
+                    let expirationDateString: string = cookiesParts.find((p: string) => p.toLowerCase().startsWith("expires="))?.split("Expires=")[1].split(";")[0].trim() || "";
+                    this.cookiesExpirationDate = new Date(expirationDateString);
+                    this.cookies = cookiesParts.find((p: string) => p.toLowerCase().startsWith("xsrf-token=") ? p.trim() : "") || "";
+                }
             }
             catch (error: any) {
                 console.error(error);
@@ -194,7 +433,7 @@ class Provider {
     }
 
     async _makeRequest(endpoint: string, method: string = "GET", body: any = null, headers: any = null, returnType: "json" | "text" = "text"): Promise<string | any> {
-
+        // Original _makeRequest logic
         try {
             await this._updateCookies();
 
@@ -217,7 +456,10 @@ class Provider {
                     headers["Content-Type"] = "application/json"
                 }
             }
-            let response = await fetch(`${this.apiBaseUrl}/${endpoint}`, options)
+            // Ensure the endpoint starts with a single slash if apiBaseUrl does not end with one
+            const url = `${this.apiBaseUrl.replace(/\/$/, '')}/${endpoint.replace(/^\//, '')}`;
+            let response = await fetch(url, options)
+
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
 
             if (returnType === "text") return await response.text();
@@ -230,7 +472,7 @@ class Provider {
     }
 
     async _getAnimeEpisodes(start: number, end: number, animeId: string | number, episodeLimitForIteration: number = 120): Promise<EpisodeDetails[]> {
-
+        // Original _getAnimeEpisodes logic
         const episodes: EpisodeDetails[] = [];
         let current = start;
         let endRange = Math.min(start + episodeLimitForIteration, end);
@@ -258,7 +500,7 @@ class Provider {
     }
 
     _normalizeQuery(query: string): string {
-
+        // Original _normalizeQuery logic
         const extras = [
             'EXTRA PART',
             'OVA',
@@ -274,14 +516,14 @@ class Provider {
         const pattern = new RegExp(`\\b(${extras.join('|')})\\b`, 'gi');
 
         let normalizedQuery: string = query
-            .replace(/\b(\d+)(st|nd|rd|th)\b/g, '$1') //Removes suffixes from a number I.e. 3rd, 1st, 11th, 12th, 2nd -> 3, 1, 11, 12, 2
-            .replace(/(\d+)\s*Season/i, '$1') //Removes season and keeps the number before the Season word
-            .replace(/Season\s*(\d+)/i, '$1') //Removes season and keeps the number after the Season word
-            .replace(pattern, '') //Removes extras
-            .replace(/-.*?-/g, '') // Removes -...-
+            .replace(/\b(\d+)(st|nd|rd|th)\b/g, '$1')
+            .replace(/(\d+)\s*Season/i, '$1')
+            .replace(/Season\s*(\d+)/i, '$1')
+            .replace(pattern, '')
+            .replace(/-.*?-/g, '')
             .replace(/\bThe(?=\s+Movie\b)/gi, '')
-            .replace(/~/g, ' ') //Removes ~
-            .replace(/\s+/g, ' ') //Replaces 1+ whitespaces with 1
+            .replace(/~/g, ' ')
+            .replace(/\s+/g, ' ')
             .replace('.', ' ')
             .trim();
 

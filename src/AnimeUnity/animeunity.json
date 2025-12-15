@@ -1,6 +1,7 @@
 {
   "id": "animeunity",
   "name": "AnimeUnity",
+  "icon": "https://raw.githubusercontent.com/Pal-droid/Seanime-streaming-providers/refs/heads/add-animeunity-mirror/src/AnimeUnity/unity.png",
   "description": "AnimeUnity is an online streaming provider for animes dubbed/subbed in Italian",
   "manifestURI": "https://raw.githubusercontent.com/Pal-droid/Seanime-streaming-providers/add-animeunity-mirror/src/AnimeUnity/animeunity.json",
   "version": "1.0.2",

@@ -22,7 +22,7 @@
         "default": "https://animeunity.so",
         "options": [
           { "label": "AnimeUnity (Default)", "value": "https://animeunity.so" },
-          { "label": "AnimeUnity (.top)", "value": "https://animeunity.top" }
+          { "label": "AnimeUnity (.top)", "value": "https://corsproxy.io/?url=https://animeunity.top" }
         ]
       }
     ]

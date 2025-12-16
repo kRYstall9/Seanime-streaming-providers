@@ -14,7 +14,7 @@ This project was initially made for myself, but I wanted to share it with you, f
 5. Paste the URL
 6. Click ***Install***
 
-<img src="https://github.com/user-attachments/assets/becca02f-1dcc-4009-a2ac-e1fa727658b4">
+<img src="https://raw.githubusercontent.com/Pal-droid/Seanime-streaming-providers/refs/heads/add-animeunity-mirror/static/installation.gif">
 
 ## ❤️ Credits
 - [<strong>Seanime App</strong>](https://github.com/5rahim/seanime) made by [<strong>5rahim</strong>](https://github.com/5rahim)

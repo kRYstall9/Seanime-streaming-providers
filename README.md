@@ -4,7 +4,7 @@
 
 ## About
 
-This project was initially made for myself, but I wanted to share it with you, fellow manga and anime fans. It mainly provides online streaming sources, allowing you to watch subbed and dubbed anime directly within the Seanime App. Right now, the only available source is AnimeKai. More will be added overtime
+This project was initially made for myself, but I wanted to share it with you, fellow manga and anime fans. It mainly provides online streaming sources, allowing you to watch subbed and dubbed anime directly within the Seanime App. More providers will be added overtime.
 
 ## Installation
 1. Open the streaming source that you want to add to the app (I.E. src/AnimeKai)
@@ -14,7 +14,7 @@ This project was initially made for myself, but I wanted to share it with you, f
 5. Paste the URL
 6. Click ***Install***
 
-https://github.com/user-attachments/assets/becca02f-1dcc-4009-a2ac-e1fa727658b4
+<img src="https://raw.githubusercontent.com/Pal-droid/Seanime-streaming-providers/refs/heads/add-animeunity-mirror/static/installation.gif">
 
 ## ❤️ Credits
 - [<strong>Seanime App</strong>](https://github.com/5rahim/seanime) made by [<strong>5rahim</strong>](https://github.com/5rahim)

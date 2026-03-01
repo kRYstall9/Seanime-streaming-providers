@@ -24,8 +24,8 @@ class Provider {
         let isManualSearch = !query.media.startDate || !query.media.startDate.year;
         allTitles = (isManualSearch ? [query.query] : [query.media.romajiTitle, query.media.englishTitle, query['query'], ...query.media.synonyms]).filter(Boolean) as string[];
 
-
         const smartSearch = $scannerUtils.buildSmartSearchTitles(allTitles);
+        smartSearch.titles.push(query.query);
         const animeId = query.media.id;
 
         console.log(`Smart search titles: ${smartSearch.titles.join(' | ')}`);

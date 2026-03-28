@@ -23,13 +23,13 @@
         "name": "batchSize",
         "label": "Batch Size",
         "type": "number",
-        "default": 50
+        "default": "50"
       },
       {
         "name": "batchDelay",
         "label": "Batch Delay",
         "type": "number",
-        "default": 500
+        "default": "500"
       }
     ]
   }

@@ -10,7 +10,7 @@
   "lang": "en",
   "payloadURI": "https://raw.githubusercontent.com/kRYstall9/Seanime-streaming-providers/refs/heads/main/src/AnimeKai/provider.ts",
   "userConfig": {
-    "requiredConfig": false,
+    "requiresConfig": false,
     "version": 1,
     "fields": [
       {

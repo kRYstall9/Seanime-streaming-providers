@@ -3,7 +3,7 @@
   "name": "AnimeKai",
   "description": "AnimeKai is an online streaming provider for subbed/dubbes animes in English",
   "manifestURI": "https://raw.githubusercontent.com/kRYstall9/Seanime-streaming-providers/refs/heads/main/src/AnimeKai/manifest.json",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "author": "kRYstall9",
   "type": "onlinestream-provider",
   "language": "typescript",
@@ -22,13 +22,13 @@
       {
         "name": "batchSize",
         "label": "Batch Size",
-        "type": "number",
+        "type": "text",
         "default": "50"
       },
       {
         "name": "batchDelay",
         "label": "Batch Delay",
-        "type": "number",
+        "type": "text",
         "default": "500"
       }
     ]

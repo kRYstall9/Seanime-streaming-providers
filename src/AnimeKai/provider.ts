@@ -38,8 +38,8 @@ interface MegaResponse {
 
 class Provider {
     private api: string = "{{baseUrl}}";
-    private batchSize: any = "{{batchSize}}";
-    private batchDelay: any = "{{batchDelay}}";
+    private batchSize: number = Number("{{batchSize}}") ?? 50;
+    private batchDelay: number = Number("{{batchDelay}}") ?? 500;
 
     getSettings(): Settings {
         return {

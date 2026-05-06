@@ -3,7 +3,8 @@
 
 class Provider {
 
-    baseUrl: string = 'https://animetsu.net';
+    baseUrl: string = "{{api}}";
+    blobDomain: string = '{{blobDomain}}';
     api: string = `${this.baseUrl.endsWith("/") ? this.baseUrl.slice(0, -1) : this.baseUrl}/v2/api/anime`;
     threshold: number = 0.7;
     headers = {
@@ -234,7 +235,7 @@ class Provider {
             }
             
             const videoSources: VideoSource[] = data.sources.map((source: any) => {
-                const fullUrl = `https://ani.metsu.site/${source?.['need_proxy'] != null ? 'proxy' : ''}${source?.url}`;
+                const fullUrl = `${this.blobDomain}/${source?.['need_proxy'] != null ? 'proxy' : ''}${source?.url}`;
                 return {
                     url: fullUrl,
                     type: source?.url?.includes('m3u8') ? 'm3u8' : source?.url?.includes('mp4') ? 'mp4' : 'unknown',

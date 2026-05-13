@@ -3,7 +3,7 @@
   "name": "AnimeUnity",
   "description": "AnimeUnity is an online streaming provider for animes dubbed/subbed in Italian",
   "manifestURI": "https://raw.githubusercontent.com/kRYstall9/Seanime-streaming-providers/refs/heads/main/src/AnimeUnity/animeunity.json",
-  "version": "1.1.2",
+  "version": "1.1.3",
   "author": "kRYstall9",
   "type": "onlinestream-provider",
   "language": "typescript",
@@ -18,6 +18,18 @@
         "label": "Base URL",
         "type": "text",
         "default": "https://www.animeunity.so"
+      },
+      {
+        "name": "referrer",
+        "label": "Referrer",
+        "type": "text",
+        "default": "https://vixcloud.co/"
+      },
+      {
+        "name": "origin",
+        "label": "Origin",
+        "type": "text",
+        "default": "https://vixcloud.co"
       }
     ]
   }

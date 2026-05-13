@@ -4,6 +4,9 @@
 class Provider {
 
     private apiBaseUrl: string = "{{baseUrl}}";
+    private referrer: string = "{{referrer}}";
+    private origin: string = "{{origin}}";
+    private userAgent: string = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
     private cookies: string = "";
     private csrfToken: string = "";
     private cookiesExpirationDate: Date | null = null;
@@ -25,13 +28,13 @@ class Provider {
         allTitles = (isManualSearch ? [query.query] : [query.media.romajiTitle, query.media.englishTitle, query['query'], ...query.media.synonyms]).filter(Boolean) as string[];
 
         const smartSearch = $scannerUtils.buildSmartSearchTitles(allTitles);
-        smartSearch.titles.push(query.query);
+        smartSearch.titles.push(...allTitles); // Aggiungi i titoli originali alla fine della lista da provare, in modo che vengano comunque tentati se il "smart search" non funziona
         const animeId = query.media.id;
 
         console.log(`Smart search titles: ${smartSearch.titles.join(' | ')}`);
         console.log(`Season: ${smartSearch.season}, Part: ${smartSearch.part}`);
 
-        const queriesToTry: string[] = [];
+        let queriesToTry: string[] = [];
         for (let title of smartSearch.titles) {
             const cleaned = $scannerUtils.sanitizeQuery(title).toLowerCase().trim();
             if (cleaned && !queriesToTry.includes(cleaned)) {
@@ -43,6 +46,7 @@ class Provider {
             }
         }
 
+        queriesToTry = [...queriesToTry.map(q => this._sanitizeTitle(q))];
         console.log(`Queries to try: ${queriesToTry.join(', ')}`);
 
         for (let searchQuery of queriesToTry) {
@@ -136,7 +140,7 @@ class Provider {
                     "Cookie": this.cookies,
                     "Referer": `${this.apiBaseUrl}/archivio`,
                     "Origin": this.apiBaseUrl,
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+                    "User-Agent": this.userAgent
                 },
                 body: JSON.stringify(body)
             });
@@ -156,9 +160,10 @@ class Provider {
     async findEpisodes(id: string): Promise<EpisodeDetails[]> {
 
         const animeId = id.split('-')[0];
+        const slug = id.split('-')[1];
         let response = await this._makeRequest(`/info_api/${animeId}/0`, "GET", null, null, "json");
         let episodesAmount = response["episodes_count"];
-        const episodes = await this._getAnimeEpisodes(0, episodesAmount, animeId);
+        const episodes = await this._getAnimeEpisodes(0, episodesAmount, animeId, slug);
 
         return episodes;
     }
@@ -166,7 +171,11 @@ class Provider {
         let server = "server1"
         if (_server !== "default") server = _server
 
+        console.log(`Finding episode server for episode ${episode.id} - server: ${server}`);
+
         let embedUrl = await this._makeRequest(episode.url, "GET", null, null, "text");
+
+        console.log(`Embed URL: ${embedUrl}`);
 
         let response = await fetch(embedUrl);
 
@@ -265,7 +274,11 @@ class Provider {
 
         const serverResult: EpisodeServer = {
             server: server,
-            headers: {},
+            headers: {
+                "Referer": this.referrer,
+                "Origin": this.origin,
+                "User-Agent": this.userAgent
+            },
             videoSources: videoSources
         }
 
@@ -317,7 +330,7 @@ class Provider {
 
             if (this.cookies) headers["Cookie"] = this.cookies
             if (this.csrfToken) headers["X-CSRF-TOKEN"] = this.csrfToken;
-            headers["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+            headers["User-Agent"] = this.userAgent;
             let options: RequestInit = {
                 method: method,
                 headers: headers,
@@ -344,7 +357,7 @@ class Provider {
         }
     }
 
-    async _getAnimeEpisodes(start: number, end: number, animeId: string | number, episodeLimitForIteration: number = 120): Promise<EpisodeDetails[]> {
+    async _getAnimeEpisodes(start: number, end: number, animeId: string | number, slug: string, episodeLimitForIteration: number = 120): Promise<EpisodeDetails[]> {
 
         const episodes: EpisodeDetails[] = [];
         let current = start;
@@ -369,6 +382,44 @@ class Provider {
 
             console.log(`WHILE - Current: ${current} - endRange: ${endRange}`);
         }
+
+        if(episodes.length === 0){
+            // Fallback to the main episode page
+            let response = await this._makeRequest(`/anime/${animeId}-${slug}`, "GET", null, null, "text");
+            if(!response){
+                console.error("Failed to fetch episode page for fallback");
+                return [];
+            }
+            let $ = LoadDoc(response);
+            let videoPlayerElement = $('video-player');
+            let episodesJson = videoPlayerElement.attr("episodes");
+            if (!episodesJson) {
+                console.error("Failed to extract anime data from video player for fallback");
+                return [];
+            }
+            console.log("Found anime data in video player, using it for fallback episode list");
+            episodesJson = JSON.parse(episodesJson);
+
+            if(episodesJson && Array.isArray(episodesJson)){
+                console.log("Episodes found in video player data for fallback:", episodesJson.length);
+                episodesJson.forEach((episode: any) => {
+                    episodes.push({
+                        id: episode['id'].toString(),
+                        number: Number(episode.number),
+                        url: `embed-url/${episode['id'].toString()}`
+                    });
+                });
+            }
+        }
+
         return episodes;
+    }
+
+    _sanitizeTitle(title: string): string {
+        console.log(`Sanitizing title: "${title}"`);
+        return title.toLowerCase()
+            .split(/[\-_:]+/)[0]
+            .replace(/\s+/g, " ")
+            .trim();
     }
 }

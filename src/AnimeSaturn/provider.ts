@@ -242,8 +242,7 @@ class Provider {
         });
       });
     }
-    c;
-
+    
     console.debug("Valid titles:", validTitles);
 
     if (validTitles.length > 0) {
